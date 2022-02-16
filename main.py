@@ -19,20 +19,23 @@ def generate_otp(username):
 	return '' if lookup_user(username)[0][3] == '' else pyotp.TOTP(lookup_user(username)[0][3]).now()
 
 def generate_jwt(username):
-	return jwt.encode({'username': username, 'iat': datetime.now(timezone.utc)}, SECRET_KEY)
+	# return jwt.encode({'username': username, 'iat': datetime.now(timezone.utc)}, SECRET_KEY)
+	return username
 
 def user_login(username, password, otp):
 	if lookup_user(username)[0][2] == hash_password(username, password) and otp == generate_otp(username):
+		print(otp)
 		res = make_response(jsonify({"success": True}))
 		res.set_cookie('token', generate_jwt(username), httponly=True)
 		cur.execute(f"UPDATE users SET last_login = '{datetime.now()}' WHERE username = '{username}';")
 		con.commit()
 		return res
-	else: return jsonify({"success": False, "error": "wrong credentials"}), 401
+	else: return jsonify({"success": False, "error": "wrong credentials", "OTP": otp}), 401
 
-def user_register(username, password, totp=False):
+def user_register(username, password, totp=True):
 	if lookup_user(username) == []:
 		totp = pyotp.random_base32() if totp else ''
+		print (totp)
 		cur.execute(f"INSERT INTO users (username, password, totp, last_login) VALUES ('{username}', '{hash_password(username, password)}', '{totp}', '{datetime.now()}')")
 		con.commit()
 		return True
@@ -68,7 +71,8 @@ def register():
 		username = request.form.get('username')
 		password = request.form.get('password')
 		if user_register(username, password):
-			return jsonify({"success": True})
+			otp = generate_otp(username)
+			return jsonify({"success": True, "OTP": otp})
 		else:
 			return jsonify({"success": False, "error": "user with this name is already exist"}), 422
 	return render_template('register.html', error=error)
